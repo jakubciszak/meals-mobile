@@ -6,9 +6,14 @@ import {
   ScrollView,
   StyleSheet,
   Platform,
+  Alert,
 } from 'react-native'
 
 export default function SettingsScreen() {
+  const showComingSoon = () => {
+    Alert.alert('Wkrótce', 'Ta funkcja będzie dostępna wkrótce.')
+  }
+
   return (
     <ScrollView style={styles.container}>
       <View style={styles.header}>
@@ -22,7 +27,7 @@ export default function SettingsScreen() {
           <Text style={styles.cardDescription}>
             Połącz z Google Drive, aby synchronizować dane między urządzeniami.
           </Text>
-          <TouchableOpacity style={styles.button}>
+          <TouchableOpacity style={styles.button} onPress={showComingSoon}>
             <Text style={styles.buttonText}>Połącz z Google Drive</Text>
           </TouchableOpacity>
         </View>
@@ -32,7 +37,7 @@ export default function SettingsScreen() {
           <Text style={styles.cardDescription}>
             Synchronizuj obiady z kalendarzem Google.
           </Text>
-          <TouchableOpacity style={styles.button}>
+          <TouchableOpacity style={styles.button} onPress={showComingSoon}>
             <Text style={styles.buttonText}>Połącz z Kalendarzem</Text>
           </TouchableOpacity>
         </View>
@@ -43,10 +48,10 @@ export default function SettingsScreen() {
             Eksportuj lub wyczyść wszystkie dane aplikacji.
           </Text>
           <View style={styles.buttonRow}>
-            <TouchableOpacity style={[styles.button, styles.buttonHalf]}>
+            <TouchableOpacity style={[styles.button, styles.buttonHalf]} onPress={showComingSoon}>
               <Text style={styles.buttonText}>Eksportuj</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.buttonDanger, styles.buttonHalf]}>
+            <TouchableOpacity style={[styles.buttonDanger, styles.buttonHalf]} onPress={showComingSoon}>
               <Text style={styles.buttonDangerText}>Wyczyść</Text>
             </TouchableOpacity>
           </View>
