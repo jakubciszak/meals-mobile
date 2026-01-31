@@ -79,10 +79,20 @@ function MealRatingSummary({ meal, members }: MealRatingSummaryProps) {
 }
 
 export default function MealsScreen() {
-  const { getMealsGroupedByDate, deleteMeal, isLoading } = useMeals()
+  const { meals, getMealsGroupedByDate, deleteMeal, exportToCSV, isLoading } = useMeals()
   const { members, isLoading: membersLoading } = useFamilyMembers()
 
   const groupedMeals = getMealsGroupedByDate()
+
+  const handleExport = async () => {
+    const success = await exportToCSV(members)
+    if (!success && meals.length > 0) {
+      Alert.alert(
+        'Błąd eksportu',
+        'Nie udało się wyeksportować pliku CSV. Sprawdź uprawnienia aplikacji.'
+      )
+    }
+  }
 
   const handleDeleteMeal = (id: string, name: string) => {
     Alert.alert(
@@ -102,6 +112,16 @@ export default function MealsScreen() {
           <Text style={styles.title}>Historia obiadów</Text>
           <Text style={styles.subtitle}>Przeglądaj wcześniejsze posiłki</Text>
         </View>
+        {meals.length > 0 && (
+          <TouchableOpacity
+            onPress={handleExport}
+            style={styles.exportButton}
+            accessibilityLabel="Eksportuj do CSV"
+          >
+            <Ionicons name="download-outline" size={20} color="#3b82f6" />
+            <Text style={styles.exportButtonText}>CSV</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       <View style={styles.content}>
@@ -246,5 +266,19 @@ const styles = StyleSheet.create({
   ratingSummaryText: {
     fontSize: 14,
     color: '#6b7280',
+  },
+  exportButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#dbeafe',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+    gap: 4,
+  },
+  exportButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#3b82f6',
   },
 })

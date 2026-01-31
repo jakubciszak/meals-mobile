@@ -1,7 +1,13 @@
 import { useState, useEffect, useCallback } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import {
+  documentDirectory,
+  writeAsStringAsync,
+  EncodingType,
+} from 'expo-file-system/legacy'
+import { isAvailableAsync, shareAsync } from 'expo-sharing'
 import { v4 as uuidv4 } from 'uuid'
-import type { Meal, MealRating } from '../types'
+import type { Meal, MealRating, FamilyMember } from '../types'
 
 const STORAGE_KEY = 'my-meals-data'
 
@@ -122,6 +128,69 @@ export function useMeals() {
     return meals.find(meal => meal.id === id)
   }, [meals])
 
+  const exportToCSV = useCallback(async (familyMembers: FamilyMember[]) => {
+    if (meals.length === 0) return false
+
+    const getMemberName = (memberId: string) => {
+      const member = familyMembers.find(m => m.id === memberId)
+      return member?.name || 'Nieznany'
+    }
+
+    const escapeCSV = (value: string) => {
+      if (value.includes(',') || value.includes('"') || value.includes('\n')) {
+        return `"${value.replace(/"/g, '""')}"`
+      }
+      return value
+    }
+
+    const headers = ['Data', 'Godzina', 'Nazwa posilku', 'Skladniki', 'Polubili', 'Nie polubili']
+    const rows = [...meals]
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .map(meal => {
+        const date = meal.date
+        const time = new Date(meal.createdAt).toLocaleTimeString('pl-PL', {
+          hour: '2-digit',
+          minute: '2-digit',
+        })
+        const ingredients = meal.ingredients?.join(', ') || ''
+        const likes = meal.ratings
+          .filter(r => r.liked)
+          .map(r => getMemberName(r.memberId))
+          .join(', ')
+        const dislikes = meal.ratings
+          .filter(r => !r.liked)
+          .map(r => getMemberName(r.memberId))
+          .join(', ')
+
+        return [date, time, meal.name, ingredients, likes, dislikes]
+          .map(escapeCSV)
+          .join(',')
+      })
+
+    const csvContent = '\ufeff' + [headers.join(','), ...rows].join('\n')
+    const fileName = `historia-obiadow-${new Date().toISOString().split('T')[0]}.csv`
+    const filePath = `${documentDirectory}${fileName}`
+
+    try {
+      await writeAsStringAsync(filePath, csvContent, {
+        encoding: EncodingType.UTF8,
+      })
+
+      const sharingAvailable = await isAvailableAsync()
+      if (sharingAvailable) {
+        await shareAsync(filePath, {
+          mimeType: 'text/csv',
+          dialogTitle: 'Eksportuj historię obiadów',
+        })
+        return true
+      }
+      return false
+    } catch (error) {
+      console.error('Failed to export CSV:', error)
+      return false
+    }
+  }, [meals])
+
   return {
     meals,
     isLoading,
@@ -132,5 +201,6 @@ export function useMeals() {
     getMealsGroupedByDate,
     updateMealRating,
     getMealById,
+    exportToCSV,
   }
 }

@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useMemo } from 'react'
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   Platform,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
+import { Picker } from '@react-native-picker/picker'
 import { useMeals } from '../hooks/useMeals'
 import { useFamilyMembers } from '../hooks/useFamilyMembers'
 import type { Meal, FamilyMember } from '../types'
@@ -81,13 +82,67 @@ function MealRatingButtons({ meal, member, onRate }: MealRatingButtonsProps) {
 
 export default function HomeScreen() {
   const [mealInput, setMealInput] = useState('')
+  const [ingredientsInput, setIngredientsInput] = useState('')
+  const [showIngredients, setShowIngredients] = useState(false)
   const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split('T')[0])
-  const { addMeal, getMealsByDate, deleteMeal, updateMealRating, isLoading } = useMeals()
+  const [filterMemberId, setFilterMemberId] = useState<string>('')
+  const [filterIngredient, setFilterIngredient] = useState<string>('')
+  const { meals, addMeal, getMealsByDate, deleteMeal, updateMealRating, isLoading } = useMeals()
   const { members, isLoading: membersLoading } = useFamilyMembers()
 
   const todayStr = new Date().toISOString().split('T')[0]
   const isToday = selectedDate === todayStr
-  const selectedMeals = getMealsByDate(selectedDate)
+
+  // Collect all unique ingredients for filter dropdown
+  const allIngredients = useMemo(() => {
+    return [...new Set(
+      meals.flatMap(meal => meal.ingredients || []).filter(i => i.length > 0)
+    )].sort()
+  }, [meals])
+
+  // Get meals for selected date with filters applied
+  const selectedMeals = useMemo(() => {
+    return getMealsByDate(selectedDate).filter(meal => {
+      // Filter by member who liked
+      if (filterMemberId) {
+        const hasLikedRating = meal.ratings.some(
+          r => r.memberId === filterMemberId && r.liked === true
+        )
+        if (!hasLikedRating) return false
+      }
+      // Filter by ingredient
+      if (filterIngredient) {
+        const hasIngredient = meal.ingredients?.some(
+          i => i.toLowerCase().includes(filterIngredient.toLowerCase())
+        )
+        if (!hasIngredient) return false
+      }
+      return true
+    })
+  }, [getMealsByDate, selectedDate, filterMemberId, filterIngredient])
+
+  const goToPreviousDay = () => {
+    const date = new Date(selectedDate + 'T12:00:00')
+    date.setDate(date.getDate() - 1)
+    setSelectedDate(date.toISOString().split('T')[0])
+  }
+
+  const goToNextDay = () => {
+    const date = new Date(selectedDate + 'T12:00:00')
+    date.setDate(date.getDate() + 1)
+    const nextDate = date.toISOString().split('T')[0]
+    // Don't go past today
+    if (nextDate <= todayStr) {
+      setSelectedDate(nextDate)
+    }
+  }
+
+  const clearFilters = () => {
+    setFilterMemberId('')
+    setFilterIngredient('')
+  }
+
+  const hasActiveFilters = filterMemberId || filterIngredient
 
   const formatDateHeader = (dateStr: string) => {
     const date = new Date(dateStr + 'T12:00:00')
@@ -116,8 +171,14 @@ export default function HomeScreen() {
 
   const handleAddMeal = () => {
     if (!mealInput.trim()) return
-    addMeal(mealInput, selectedDate)
+    const ingredients = ingredientsInput
+      .split(',')
+      .map(i => i.trim())
+      .filter(i => i.length > 0)
+    addMeal(mealInput, selectedDate, ingredients.length > 0 ? ingredients : undefined)
     setMealInput('')
+    setIngredientsInput('')
+    setShowIngredients(false)
   }
 
   const handleDeleteMeal = (id: string, name: string) => {
@@ -161,12 +222,98 @@ export default function HomeScreen() {
             <Text style={styles.addButtonText}>Dodaj</Text>
           </TouchableOpacity>
         </View>
+        <TouchableOpacity
+          style={styles.ingredientsToggle}
+          onPress={() => setShowIngredients(!showIngredients)}
+        >
+          <Ionicons
+            name={showIngredients ? 'chevron-up' : 'chevron-down'}
+            size={16}
+            color="#6b7280"
+          />
+          <Text style={styles.ingredientsToggleText}>
+            Dodaj składniki (opcjonalnie)
+          </Text>
+        </TouchableOpacity>
+        {showIngredients && (
+          <TextInput
+            style={[styles.input, styles.ingredientsInput]}
+            value={ingredientsInput}
+            onChangeText={setIngredientsInput}
+            placeholder="np. kurczak, ryż, warzywa"
+            placeholderTextColor="#9ca3af"
+          />
+        )}
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>
-          Posiłki: {formatDateHeader(selectedDate)}
-        </Text>
+        <View style={styles.dateNavigation}>
+          <TouchableOpacity
+            onPress={goToPreviousDay}
+            style={styles.navButton}
+            accessibilityLabel="Poprzedni dzień"
+          >
+            <Ionicons name="chevron-back" size={24} color="#3b82f6" />
+          </TouchableOpacity>
+          <Text style={styles.sectionTitle}>
+            {formatDateHeader(selectedDate)}
+          </Text>
+          <TouchableOpacity
+            onPress={goToNextDay}
+            style={[styles.navButton, isToday && styles.navButtonDisabled]}
+            disabled={isToday}
+            accessibilityLabel="Następny dzień"
+          >
+            <Ionicons
+              name="chevron-forward"
+              size={24}
+              color={isToday ? '#d1d5db' : '#3b82f6'}
+            />
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.filtersContainer}>
+          <View style={styles.filterRow}>
+            <View style={styles.pickerWrapper}>
+              <Picker
+                selectedValue={filterMemberId}
+                onValueChange={(value) => setFilterMemberId(value)}
+                style={styles.picker}
+              >
+                <Picker.Item label="Wszystkie osoby" value="" />
+                {members.map(member => (
+                  <Picker.Item
+                    key={member.id}
+                    label={`Polubione przez: ${member.name}`}
+                    value={member.id}
+                  />
+                ))}
+              </Picker>
+            </View>
+            <View style={styles.pickerWrapper}>
+              <Picker
+                selectedValue={filterIngredient}
+                onValueChange={(value) => setFilterIngredient(value)}
+                style={styles.picker}
+              >
+                <Picker.Item label="Wszystkie składniki" value="" />
+                {allIngredients.map(ingredient => (
+                  <Picker.Item
+                    key={ingredient}
+                    label={ingredient}
+                    value={ingredient}
+                  />
+                ))}
+              </Picker>
+            </View>
+          </View>
+          {hasActiveFilters && (
+            <TouchableOpacity onPress={clearFilters} style={styles.clearFiltersButton}>
+              <Ionicons name="close-circle" size={16} color="#6b7280" />
+              <Text style={styles.clearFiltersText}>Wyczyść filtry</Text>
+            </TouchableOpacity>
+          )}
+        </View>
         {isLoading || membersLoading ? (
           <Text style={styles.emptyText}>Ładowanie...</Text>
         ) : selectedMeals.length === 0 ? (
@@ -177,7 +324,7 @@ export default function HomeScreen() {
           selectedMeals.map((meal) => (
             <View key={meal.id} style={styles.card}>
               <View style={styles.mealHeader}>
-                <View>
+                <View style={styles.mealInfo}>
                   <Text style={styles.mealName}>{meal.name}</Text>
                   <Text style={styles.mealTime}>
                     {new Date(meal.createdAt).toLocaleTimeString('pl-PL', {
@@ -185,6 +332,15 @@ export default function HomeScreen() {
                       minute: '2-digit',
                     })}
                   </Text>
+                  {meal.ingredients && meal.ingredients.length > 0 && (
+                    <View style={styles.ingredientsList}>
+                      {meal.ingredients.map((ingredient, idx) => (
+                        <View key={idx} style={styles.ingredientTag}>
+                          <Text style={styles.ingredientTagText}>{ingredient}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  )}
                 </View>
                 <TouchableOpacity
                   onPress={() => handleDeleteMeal(meal.id, meal.name)}
@@ -367,5 +523,81 @@ const styles = StyleSheet.create({
   },
   ratingButtonDisliked: {
     backgroundColor: '#ef4444',
+  },
+  ingredientsToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+    gap: 4,
+  },
+  ingredientsToggleText: {
+    fontSize: 14,
+    color: '#6b7280',
+  },
+  ingredientsInput: {
+    marginTop: 8,
+    flex: 0,
+  },
+  dateNavigation: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    marginBottom: 8,
+  },
+  navButton: {
+    padding: 8,
+  },
+  navButtonDisabled: {
+    opacity: 0.3,
+  },
+  filtersContainer: {
+    paddingHorizontal: 16,
+    marginBottom: 8,
+  },
+  filterRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  pickerWrapper: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 6,
+    backgroundColor: '#fff',
+    overflow: 'hidden',
+  },
+  picker: {
+    height: 44,
+    marginTop: Platform.OS === 'ios' ? -8 : 0,
+  },
+  clearFiltersButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    gap: 4,
+  },
+  clearFiltersText: {
+    fontSize: 14,
+    color: '#6b7280',
+  },
+  mealInfo: {
+    flex: 1,
+  },
+  ingredientsList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+    marginTop: 8,
+  },
+  ingredientTag: {
+    backgroundColor: '#f3f4f6',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  ingredientTagText: {
+    fontSize: 12,
+    color: '#4b5563',
   },
 })
