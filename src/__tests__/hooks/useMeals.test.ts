@@ -1,22 +1,35 @@
 import { renderHook, act } from '@testing-library/react-hooks';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as FileSystem from 'expo-file-system';
-import * as Sharing from 'expo-sharing';
 import { useMeals } from '../../hooks/useMeals';
 import type { FamilyMember } from '../../types';
 
-jest.mock('expo-file-system', () => ({
-  documentDirectory: '/mock/documents/',
-  writeAsStringAsync: jest.fn().mockResolvedValue(undefined),
-  EncodingType: {
-    UTF8: 'utf8',
-  },
-}));
+// Create mock functions that will be used by the module mocks
+const mockWriteAsStringAsync = jest.fn();
+const mockIsAvailableAsync = jest.fn();
+const mockShareAsync = jest.fn();
 
-jest.mock('expo-sharing', () => ({
-  isAvailableAsync: jest.fn().mockResolvedValue(true),
-  shareAsync: jest.fn().mockResolvedValue(undefined),
-}));
+jest.mock('expo-file-system/legacy', () => {
+  return {
+    documentDirectory: '/mock/documents/',
+    get writeAsStringAsync() {
+      return mockWriteAsStringAsync;
+    },
+    EncodingType: {
+      UTF8: 'utf8',
+    },
+  };
+});
+
+jest.mock('expo-sharing', () => {
+  return {
+    get isAvailableAsync() {
+      return mockIsAvailableAsync;
+    },
+    get shareAsync() {
+      return mockShareAsync;
+    },
+  };
+});
 
 // Custom waitFor implementation for hooks
 const waitFor = async (callback: () => void, options = { timeout: 1000, interval: 50 }) => {
@@ -507,6 +520,9 @@ describe('useMeals', () => {
 
     beforeEach(() => {
       jest.clearAllMocks();
+      mockWriteAsStringAsync.mockResolvedValue(undefined);
+      mockIsAvailableAsync.mockResolvedValue(true);
+      mockShareAsync.mockResolvedValue(undefined);
     });
 
     it('should return false when no meals exist', async () => {
@@ -522,7 +538,7 @@ describe('useMeals', () => {
       });
 
       expect(exportResult).toBe(false);
-      expect(FileSystem.writeAsStringAsync).not.toHaveBeenCalled();
+      expect(mockWriteAsStringAsync).not.toHaveBeenCalled();
     });
 
     it('should create CSV file with correct headers', async () => {
@@ -540,8 +556,8 @@ describe('useMeals', () => {
         await result.current.exportToCSV(mockMembers);
       });
 
-      expect(FileSystem.writeAsStringAsync).toHaveBeenCalled();
-      const csvContent = (FileSystem.writeAsStringAsync as jest.Mock).mock.calls[0][1];
+      expect(mockWriteAsStringAsync).toHaveBeenCalled();
+      const csvContent = (mockWriteAsStringAsync as jest.Mock).mock.calls[0][1];
       expect(csvContent).toContain('Data,Godzina,Nazwa posilku,Skladniki,Polubili,Nie polubili');
     });
 
@@ -560,7 +576,7 @@ describe('useMeals', () => {
         await result.current.exportToCSV(mockMembers);
       });
 
-      const csvContent = (FileSystem.writeAsStringAsync as jest.Mock).mock.calls[0][1];
+      const csvContent = (mockWriteAsStringAsync as jest.Mock).mock.calls[0][1];
       expect(csvContent).toContain('2024-01-15');
       expect(csvContent).toContain('Spaghetti');
       expect(csvContent).toContain('makaron, sos');
@@ -588,7 +604,7 @@ describe('useMeals', () => {
         await result.current.exportToCSV(mockMembers);
       });
 
-      const csvContent = (FileSystem.writeAsStringAsync as jest.Mock).mock.calls[0][1];
+      const csvContent = (mockWriteAsStringAsync as jest.Mock).mock.calls[0][1];
       expect(csvContent).toContain('Jan');
       expect(csvContent).toContain('Anna');
     });
@@ -608,12 +624,12 @@ describe('useMeals', () => {
         await result.current.exportToCSV(mockMembers);
       });
 
-      expect(Sharing.isAvailableAsync).toHaveBeenCalled();
-      expect(Sharing.shareAsync).toHaveBeenCalled();
+      expect(mockIsAvailableAsync).toHaveBeenCalled();
+      expect(mockShareAsync).toHaveBeenCalled();
     });
 
     it('should return false when sharing is not available', async () => {
-      (Sharing.isAvailableAsync as jest.Mock).mockResolvedValueOnce(false);
+      (mockIsAvailableAsync as jest.Mock).mockResolvedValueOnce(false);
 
       const { result } = renderHook(() => useMeals());
 
@@ -648,7 +664,7 @@ describe('useMeals', () => {
         await result.current.exportToCSV(mockMembers);
       });
 
-      const csvContent = (FileSystem.writeAsStringAsync as jest.Mock).mock.calls[0][1];
+      const csvContent = (mockWriteAsStringAsync as jest.Mock).mock.calls[0][1];
       expect(csvContent).toContain('"Meal with ""quotes"" and, commas"');
     });
 
@@ -669,7 +685,7 @@ describe('useMeals', () => {
         await result.current.exportToCSV(mockMembers);
       });
 
-      const csvContent = (FileSystem.writeAsStringAsync as jest.Mock).mock.calls[0][1];
+      const csvContent = (mockWriteAsStringAsync as jest.Mock).mock.calls[0][1];
       const lines = csvContent.split('\n');
       // Headers + 3 meals = 4 lines
       expect(lines.length).toBe(4);

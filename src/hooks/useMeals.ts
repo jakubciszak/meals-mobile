@@ -1,7 +1,11 @@
 import { useState, useEffect, useCallback } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import * as FileSystem from 'expo-file-system'
-import * as Sharing from 'expo-sharing'
+import {
+  documentDirectory,
+  writeAsStringAsync,
+  EncodingType,
+} from 'expo-file-system/legacy'
+import { isAvailableAsync, shareAsync } from 'expo-sharing'
 import { v4 as uuidv4 } from 'uuid'
 import type { Meal, MealRating, FamilyMember } from '../types'
 
@@ -165,16 +169,16 @@ export function useMeals() {
 
     const csvContent = '\ufeff' + [headers.join(','), ...rows].join('\n')
     const fileName = `historia-obiadow-${new Date().toISOString().split('T')[0]}.csv`
-    const filePath = `${FileSystem.documentDirectory}${fileName}`
+    const filePath = `${documentDirectory}${fileName}`
 
     try {
-      await FileSystem.writeAsStringAsync(filePath, csvContent, {
-        encoding: FileSystem.EncodingType.UTF8,
+      await writeAsStringAsync(filePath, csvContent, {
+        encoding: EncodingType.UTF8,
       })
 
-      const isAvailable = await Sharing.isAvailableAsync()
-      if (isAvailable) {
-        await Sharing.shareAsync(filePath, {
+      const sharingAvailable = await isAvailableAsync()
+      if (sharingAvailable) {
+        await shareAsync(filePath, {
           mimeType: 'text/csv',
           dialogTitle: 'Eksportuj historię obiadów',
         })
