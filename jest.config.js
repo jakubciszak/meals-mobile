@@ -12,11 +12,13 @@ module.exports = {
     '!src/**/*.d.ts',
     '!**/node_modules/**',
   ],
-  testMatch: ['**/src/__tests__/hooks/**/*.(spec|test).[jt]s?(x)'],
+  testMatch: ['**/src/__tests__/**/*.(spec|test).[jt]s?(x)'],
   testPathIgnorePatterns: ['/node_modules/', '/android/', '/ios/'],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
     '^expo$': '<rootDir>/__mocks__/expo.js',
     '^expo/(.*)$': '<rootDir>/__mocks__/expo.js',
+    '^expo-asset$': '<rootDir>/__mocks__/expo-asset.js',
+    '^@expo/vector-icons$': '<rootDir>/__mocks__/@expo/vector-icons.js',
   },
 };

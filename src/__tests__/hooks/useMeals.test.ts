@@ -1,6 +1,22 @@
 import { renderHook, act } from '@testing-library/react-hooks';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 import { useMeals } from '../../hooks/useMeals';
+import type { FamilyMember } from '../../types';
+
+jest.mock('expo-file-system', () => ({
+  documentDirectory: '/mock/documents/',
+  writeAsStringAsync: jest.fn().mockResolvedValue(undefined),
+  EncodingType: {
+    UTF8: 'utf8',
+  },
+}));
+
+jest.mock('expo-sharing', () => ({
+  isAvailableAsync: jest.fn().mockResolvedValue(true),
+  shareAsync: jest.fn().mockResolvedValue(undefined),
+}));
 
 // Custom waitFor implementation for hooks
 const waitFor = async (callback: () => void, options = { timeout: 1000, interval: 50 }) => {
@@ -480,6 +496,186 @@ describe('useMeals', () => {
 
       expect(data.meals).toHaveLength(1);
       expect(data.meals[0].name).toBe('Persisted Meal');
+    });
+  });
+
+  describe('exportToCSV', () => {
+    const mockMembers: FamilyMember[] = [
+      { id: 'member-1', name: 'Jan', createdAt: '2024-01-01T00:00:00.000Z' },
+      { id: 'member-2', name: 'Anna', createdAt: '2024-01-01T00:00:00.000Z' },
+    ];
+
+    beforeEach(() => {
+      jest.clearAllMocks();
+    });
+
+    it('should return false when no meals exist', async () => {
+      const { result } = renderHook(() => useMeals());
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      let exportResult: boolean | undefined;
+      await act(async () => {
+        exportResult = await result.current.exportToCSV(mockMembers);
+      });
+
+      expect(exportResult).toBe(false);
+      expect(FileSystem.writeAsStringAsync).not.toHaveBeenCalled();
+    });
+
+    it('should create CSV file with correct headers', async () => {
+      const { result } = renderHook(() => useMeals());
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      act(() => {
+        result.current.addMeal('Test Meal', '2024-01-15', ['kurczak', 'ryż']);
+      });
+
+      await act(async () => {
+        await result.current.exportToCSV(mockMembers);
+      });
+
+      expect(FileSystem.writeAsStringAsync).toHaveBeenCalled();
+      const csvContent = (FileSystem.writeAsStringAsync as jest.Mock).mock.calls[0][1];
+      expect(csvContent).toContain('Data,Godzina,Nazwa posilku,Skladniki,Polubili,Nie polubili');
+    });
+
+    it('should include meal data in CSV', async () => {
+      const { result } = renderHook(() => useMeals());
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      act(() => {
+        result.current.addMeal('Spaghetti', '2024-01-15', ['makaron', 'sos']);
+      });
+
+      await act(async () => {
+        await result.current.exportToCSV(mockMembers);
+      });
+
+      const csvContent = (FileSystem.writeAsStringAsync as jest.Mock).mock.calls[0][1];
+      expect(csvContent).toContain('2024-01-15');
+      expect(csvContent).toContain('Spaghetti');
+      expect(csvContent).toContain('makaron, sos');
+    });
+
+    it('should include ratings in CSV', async () => {
+      const { result } = renderHook(() => useMeals());
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      act(() => {
+        result.current.addMeal('Rated Meal', '2024-01-15');
+      });
+
+      const mealId = result.current.meals[0].id;
+
+      act(() => {
+        result.current.updateMealRating(mealId, 'member-1', true);
+        result.current.updateMealRating(mealId, 'member-2', false);
+      });
+
+      await act(async () => {
+        await result.current.exportToCSV(mockMembers);
+      });
+
+      const csvContent = (FileSystem.writeAsStringAsync as jest.Mock).mock.calls[0][1];
+      expect(csvContent).toContain('Jan');
+      expect(csvContent).toContain('Anna');
+    });
+
+    it('should call sharing API', async () => {
+      const { result } = renderHook(() => useMeals());
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      act(() => {
+        result.current.addMeal('Share Meal');
+      });
+
+      await act(async () => {
+        await result.current.exportToCSV(mockMembers);
+      });
+
+      expect(Sharing.isAvailableAsync).toHaveBeenCalled();
+      expect(Sharing.shareAsync).toHaveBeenCalled();
+    });
+
+    it('should return false when sharing is not available', async () => {
+      (Sharing.isAvailableAsync as jest.Mock).mockResolvedValueOnce(false);
+
+      const { result } = renderHook(() => useMeals());
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      act(() => {
+        result.current.addMeal('No Share Meal');
+      });
+
+      let exportResult: boolean | undefined;
+      await act(async () => {
+        exportResult = await result.current.exportToCSV(mockMembers);
+      });
+
+      expect(exportResult).toBe(false);
+    });
+
+    it('should escape CSV special characters', async () => {
+      const { result } = renderHook(() => useMeals());
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      act(() => {
+        result.current.addMeal('Meal with "quotes" and, commas', '2024-01-15');
+      });
+
+      await act(async () => {
+        await result.current.exportToCSV(mockMembers);
+      });
+
+      const csvContent = (FileSystem.writeAsStringAsync as jest.Mock).mock.calls[0][1];
+      expect(csvContent).toContain('"Meal with ""quotes"" and, commas"');
+    });
+
+    it('should sort meals by date descending', async () => {
+      const { result } = renderHook(() => useMeals());
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      act(() => {
+        result.current.addMeal('Older', '2024-01-10');
+        result.current.addMeal('Newer', '2024-01-20');
+        result.current.addMeal('Middle', '2024-01-15');
+      });
+
+      await act(async () => {
+        await result.current.exportToCSV(mockMembers);
+      });
+
+      const csvContent = (FileSystem.writeAsStringAsync as jest.Mock).mock.calls[0][1];
+      const lines = csvContent.split('\n');
+      // Headers + 3 meals = 4 lines
+      expect(lines.length).toBe(4);
+      expect(lines[1]).toContain('2024-01-20');
+      expect(lines[2]).toContain('2024-01-15');
+      expect(lines[3]).toContain('2024-01-10');
     });
   });
 });
