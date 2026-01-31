@@ -16,7 +16,16 @@ export function useMeals() {
         const stored = await AsyncStorage.getItem(STORAGE_KEY)
         if (stored) {
           const data = JSON.parse(stored)
-          setMeals(data.meals || [])
+          const loadedMeals = Array.isArray(data.meals) ? data.meals : []
+          // Validate meal objects have required fields
+          const validMeals = loadedMeals.filter((meal: unknown): meal is Meal =>
+            meal !== null &&
+            typeof meal === 'object' &&
+            typeof (meal as Meal).id === 'string' &&
+            typeof (meal as Meal).name === 'string' &&
+            typeof (meal as Meal).date === 'string'
+          )
+          setMeals(validMeals)
         }
       } catch (error) {
         console.error('Failed to load meals:', error)
@@ -37,12 +46,21 @@ export function useMeals() {
   }, [meals, isLoading])
 
   const addMeal = useCallback((name: string, date?: string, ingredients?: string[]) => {
+    if (!name || typeof name !== 'string') {
+      return null
+    }
+
+    const trimmedName = name.trim()
+    if (!trimmedName) {
+      return null
+    }
+
     const now = new Date().toISOString()
-    const mealDate = date || now.split('T')[0]
+    const mealDate = date && typeof date === 'string' ? date : now.split('T')[0]
 
     const newMeal: Meal = {
       id: uuidv4(),
-      name: name.trim(),
+      name: trimmedName,
       date: mealDate,
       ratings: [],
       ingredients: ingredients && ingredients.length > 0 ? ingredients : undefined,

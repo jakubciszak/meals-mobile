@@ -16,7 +16,15 @@ export function useFamilyMembers() {
         const stored = await AsyncStorage.getItem(STORAGE_KEY)
         if (stored) {
           const data = JSON.parse(stored)
-          setMembers(data.members || [])
+          const loadedMembers = Array.isArray(data.members) ? data.members : []
+          // Validate member objects have required fields
+          const validMembers = loadedMembers.filter((member: unknown): member is FamilyMember =>
+            member !== null &&
+            typeof member === 'object' &&
+            typeof (member as FamilyMember).id === 'string' &&
+            typeof (member as FamilyMember).name === 'string'
+          )
+          setMembers(validMembers)
         }
       } catch (error) {
         console.error('Failed to load family members:', error)
@@ -37,11 +45,20 @@ export function useFamilyMembers() {
   }, [members, isLoading])
 
   const addMember = useCallback((name: string, avatar?: string) => {
+    if (!name || typeof name !== 'string') {
+      return null
+    }
+
+    const trimmedName = name.trim()
+    if (!trimmedName) {
+      return null
+    }
+
     const now = new Date().toISOString()
 
     const newMember: FamilyMember = {
       id: uuidv4(),
-      name: name.trim(),
+      name: trimmedName,
       avatar,
       createdAt: now,
     }

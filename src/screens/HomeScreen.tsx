@@ -43,7 +43,7 @@ function MealRatingButtons({ meal, member, onRate }: MealRatingButtonsProps) {
     <View style={styles.ratingRow}>
       <View style={styles.memberAvatar}>
         <Text style={styles.memberAvatarText}>
-          {member.name.charAt(0).toUpperCase()}
+          {member.name ? member.name.charAt(0).toUpperCase() : '?'}
         </Text>
       </View>
       <Text style={styles.memberName}>{member.name}</Text>
@@ -115,8 +115,8 @@ export default function HomeScreen() {
   })
 
   const handleAddMeal = () => {
-    if (!mealInput.trim()) return
-    addMeal(mealInput, selectedDate)
+    if (!mealInput || !mealInput.trim()) return
+    addMeal(mealInput.trim(), selectedDate)
     setMealInput('')
   }
 

@@ -19,8 +19,8 @@ export default function FamilyScreen() {
   const [editingName, setEditingName] = useState('')
 
   const handleAddMember = () => {
-    if (!newMemberName.trim()) return
-    addMember(newMemberName)
+    if (!newMemberName || !newMemberName.trim()) return
+    addMember(newMemberName.trim())
     setNewMemberName('')
   }
 
@@ -30,8 +30,8 @@ export default function FamilyScreen() {
   }
 
   const handleSaveEdit = () => {
-    if (!editingId || !editingName.trim()) return
-    updateMember(editingId, { name: editingName })
+    if (!editingId || !editingName || !editingName.trim()) return
+    updateMember(editingId, { name: editingName.trim() })
     setEditingId(null)
     setEditingName('')
   }
@@ -115,7 +115,7 @@ export default function FamilyScreen() {
                   <View style={styles.memberInfo}>
                     <View style={styles.memberAvatar}>
                       <Text style={styles.memberAvatarText}>
-                        {member.name.charAt(0).toUpperCase()}
+                        {member.name ? member.name.charAt(0).toUpperCase() : '?'}
                       </Text>
                     </View>
                     <Text style={styles.memberName}>{member.name}</Text>
